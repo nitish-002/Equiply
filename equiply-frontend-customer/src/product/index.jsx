@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import Header from "../header";
 import Footer from "../Footer";
 import { Link } from "react-router-dom";
 import { Heart } from "lucide-react";
+import axios from "axios";
 
 const Product = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const params = new URLSearchParams(location.search);
   const searchTerm = params.get("search") || "";
 
@@ -14,6 +16,14 @@ const Product = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedCategories, setSelectedCategories] = useState([]);
+  const [wishlistItems, setWishlistItems] = useState([]);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    // Check if user is logged in
+    const token = localStorage.getItem('authToken');
+    setIsLoggedIn(!!token);
+  }, []);
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -31,10 +41,62 @@ const Product = () => {
     fetchProducts();
   }, []);
 
+  useEffect(() => {
+    const fetchWishlist = async () => {
+      const token = localStorage.getItem('authToken');
+      if (!token) return;
+      
+      try {
+        const response = await axios.get('http://localhost:3000/wishlist', {
+          headers: { 'x-access-token': token }
+        });
+        setWishlistItems(response.data);
+      } catch (error) {
+        console.error('Error fetching wishlist:', error);
+      }
+    };
+
+    fetchWishlist();
+  }, []);
+
   const handleCategoryChange = (category) => {
     setSelectedCategories((prev) =>
       prev.includes(category) ? prev.filter((c) => c !== category) : [...prev, category]
     );
+  };
+
+  const handleWishlistClick = async (e, productId) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      navigate('/login');
+      return;
+    }
+
+    try {
+      const isInWishlist = wishlistItems.some(item => item.id === productId);
+      
+      if (isInWishlist) {
+        await axios.delete(`http://localhost:3000/wishlist/remove/${productId}`, {
+          headers: { 'x-access-token': token }
+        });
+        setWishlistItems(wishlistItems.filter(item => item.id !== productId));
+      } else {
+        await axios.post('http://localhost:3000/wishlist/add', 
+          { productId },
+          { headers: { 'x-access-token': token } }
+        );
+        setWishlistItems([...wishlistItems, { id: productId }]);
+      }
+    } catch (error) {
+      console.error('Error toggling wishlist:', error);
+      if (error.response?.status === 401) {
+        localStorage.removeItem('authToken');
+        navigate('/login');
+      }
+    }
   };
 
   const filteredProducts = products.filter((product) => {
@@ -73,30 +135,36 @@ const Product = () => {
             <div className="text-center py-20 text-lg font-medium">No products found.</div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-              {filteredProducts.map((product) => (
-                <Link
-                  to={`/productveiw/${product._id || product.id}`}
-                  key={product._id || product.id}
-                  className="border rounded-lg p-4 flex flex-col items-center text-center hover:shadow-lg transition-shadow relative no-underline text-inherit"
-                >
-                  <button
-                    className="absolute top-2 right-2 p-1 rounded-full bg-white hover:bg-gray-100"
-                    onClick={(e) => e.preventDefault()}
+              {filteredProducts.map((product) => {
+                const isInWishlist = wishlistItems.some(item => item.id === product._id);
+                return (
+                  <Link
+                    to={`/productveiw/${product._id || product.id}`}
+                    key={product._id || product.id}
+                    className="border rounded-lg p-4 flex flex-col items-center text-center hover:shadow-lg transition-shadow relative no-underline text-inherit"
                   >
-                    <Heart size={18} color="#000" />
-                  </button>
-                  <img
-                    src={product.images || "https://via.placeholder.com/150"}
-                    alt={product.name}
-                    className="w-28 h-28 object-contain mb-4"
-                  />
-                  <h3 className="text-sm font-medium mb-2 text-black">{product.name}</h3>
-                  <p className="text-lg font-bold mb-2 text-black">₹{product.price}</p>
-                  <button className="bg-black text-white px-4 py-2 text-sm rounded hover:bg-gray-800" onClick={(e) => e.preventDefault()}>
-                    Rent Now
-                  </button>
-                </Link>
-              ))}
+                    <button
+                      className={`absolute top-2 right-2 p-1 rounded-full bg-white hover:bg-gray-100 transition-colors ${
+                        isInWishlist ? 'text-red-500' : 'text-gray-400'
+                      }`}
+                      onClick={(e) => handleWishlistClick(e, product._id)}
+                      title={isInWishlist ? "Remove from wishlist" : "Add to wishlist"}
+                    >
+                      <Heart size={18} fill={isInWishlist ? 'currentColor' : 'none'} />
+                    </button>
+                    <img
+                      src={product.images || "https://via.placeholder.com/150"}
+                      alt={product.name}
+                      className="w-28 h-28 object-contain mb-4"
+                    />
+                    <h3 className="text-sm font-medium mb-2 text-black">{product.name}</h3>
+                    <p className="text-lg font-bold mb-2 text-black">₹{product.price}</p>
+                    <button className="bg-black text-white px-4 py-2 text-sm rounded hover:bg-gray-800" onClick={(e) => e.preventDefault()}>
+                      Rent Now
+                    </button>
+                  </Link>
+                );
+              })}
             </div>
           )}
         </main>

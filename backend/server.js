@@ -10,6 +10,7 @@ const paymentRouter = require('./routes/payment.route.js');
 const uploadRouter = require('./routes/upload.route.js');
 const notificationRoutes = require('./routes/notification.route');
 const adminRouter = require('./routes/admin.route.js');
+const wishlistRouter = require('./routes/wishlist.js');
 
 const connectDB=require('./db/models/connection.js');
 connectDB();
@@ -25,6 +26,7 @@ app.use('/payment', paymentRouter);
 app.use('/upload', uploadRouter);
 app.use('/api/notifications', notificationRoutes);
 app.use('/admin', adminRouter);
+app.use('/wishlist', wishlistRouter);
 
 app.use((req, res) => {
     res.status(404).json({ success: false, message: "Page not found" });

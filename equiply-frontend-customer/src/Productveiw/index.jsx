@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Star, StarHalf, Heart } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import Header from '../header';
 import Footer from '../Footer';
 
@@ -33,17 +34,25 @@ const ProductVeiw = () => {
   const [reviewStats, setReviewStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [newReview, setNewReview] = useState({ rating: 0, comment: '' }); // Changed from 5 to 0
+  const [newReview, setNewReview] = useState({ rating: 0, comment: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [reviewError, setReviewError] = useState(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [selectedRental, setSelectedRental] = useState('days');
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [isInWishlist, setIsInWishlist] = useState(false);
+  const [wishlistCount, setWishlistCount] = useState(0);
 
   useEffect(() => {
     // Check if user is logged in
     const token = localStorage.getItem('authToken');
-    setIsLoggedIn(!!token);
+    console.log('Auth token from localStorage:', token);
+    if (!token) {
+      console.log('No auth token found');
+      setIsLoggedIn(false);
+      return;
+    }
+    setIsLoggedIn(true);
   }, []);
 
   useEffect(() => {
@@ -107,6 +116,43 @@ const ProductVeiw = () => {
       fetchAllReviews();
     }
   }, [id]);
+
+  useEffect(() => {
+    const checkWishlistStatus = async () => {
+      const token = localStorage.getItem('authToken');
+      if (!token || !product?._id) {
+        console.log('No token or product ID, skipping wishlist check');
+        return;
+      }
+      
+      try {
+        console.log('Checking wishlist with token:', token);
+        const response = await axios.get('http://localhost:3000/wishlist', {
+          headers: { 
+            'x-access-token': token
+          }
+        });
+        
+        console.log('Wishlist response:', response.data);
+        const isInWishlist = response.data.some(item => item.product._id === product._id);
+        console.log('Is in wishlist:', isInWishlist);
+        setIsInWishlist(isInWishlist);
+        setWishlistCount(response.data.length);
+      } catch (error) {
+        console.error('Error checking wishlist status:', error.response?.data || error.message);
+        if (error.response?.status === 401) {
+          console.log('Token expired or invalid, redirecting to login');
+          localStorage.removeItem('authToken');
+          setIsLoggedIn(false);
+          navigate('/login');
+        }
+      }
+    };
+
+    if (product?._id) {
+      checkWishlistStatus();
+    }
+  }, [product?._id]);
 
   const handleSubmitReview = async (e) => {
     e.preventDefault();
@@ -219,6 +265,39 @@ const ProductVeiw = () => {
     );
   };
 
+  const toggleWishlist = async (e) => {
+    e.stopPropagation();
+    const token = localStorage.getItem("authToken");
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+
+    try {
+      if (isInWishlist) {
+        await axios.delete(`http://localhost:3000/wishlist/remove/${product._id}`, {
+          headers: { 'x-access-token': token }
+        });
+        setIsInWishlist(false);
+        setWishlistCount(prev => prev - 1);
+      } else {
+        await axios.post('http://localhost:3000/wishlist/add', 
+          { productId: product._id },
+          { headers: { 'x-access-token': token } }
+        );
+        setIsInWishlist(true);
+        setWishlistCount(prev => prev + 1);
+      }
+    } catch (error) {
+      console.error('Error toggling wishlist:', error);
+      if (error.response?.status === 401) {
+        localStorage.removeItem('authToken');
+        setIsLoggedIn(false);
+        navigate('/login');
+      }
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex flex-col min-h-screen">
@@ -318,7 +397,18 @@ const ProductVeiw = () => {
 
           {/* Rest of product details */}
           <div>
-            <h1 className="text-3xl font-bold mb-2">{product.name}</h1>
+            <div className="flex justify-between items-start">
+              <h1 className="text-3xl font-bold mb-4">{product.name}</h1>
+              <button
+                onClick={toggleWishlist}
+                className={`p-2 rounded-full transition-colors ${
+                  isInWishlist ? 'text-red-500 hover:text-red-600' : 'text-gray-400 hover:text-red-400'
+                }`}
+                title={isInWishlist ? "Remove from wishlist" : "Add to wishlist"}
+              >
+                <Heart size={24} fill={isInWishlist ? 'currentColor' : 'none'} />
+              </button>
+            </div>
             <div className="mb-4">
               <p className="text-xl font-semibold text-gray-800">Rental Pricing:</p>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2">
@@ -379,8 +469,16 @@ const ProductVeiw = () => {
               </div>
             </div>
             <div className="flex items-center gap-4 mb-4">
-              <button className="flex items-center gap-2 border px-4 py-2 rounded-lg hover:bg-gray-100">
-                <Heart size={18} /> to Wishlist
+              <button 
+                onClick={toggleWishlist}
+                className={`flex items-center gap-2 border px-4 py-2 rounded-lg transition-colors ${
+                  isInWishlist 
+                    ? 'bg-red-50 border-red-200 text-red-500 hover:bg-red-100' 
+                    : 'hover:bg-gray-100'
+                }`}
+              >
+                <Heart size={18} fill={isInWishlist ? 'currentColor' : 'none'} />
+                {isInWishlist ? 'Remove from Wishlist' : 'Add to Wishlist'}
               </button>
               <button 
                 className="bg-black text-white px-4 py-2 rounded-lg hover:opacity-90"

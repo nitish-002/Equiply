@@ -27,6 +27,7 @@ const Header = () => {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const [wishlistCount, setWishlistCount] = useState(0);
 
   const dropdownRef = useRef(null);
   const userMenuRef = useRef(null);
@@ -53,6 +54,24 @@ const Header = () => {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    const fetchWishlistCount = async () => {
+      const token = localStorage.getItem("authToken");
+      if (!token) return;
+
+      try {
+        const response = await axios.get('http://localhost:3000/wishlist', {
+          headers: { 'x-access-token': token }
+        });
+        setWishlistCount(response.data.length);
+      } catch (error) {
+        console.error('Error fetching wishlist count:', error);
+      }
+    };
+
+    fetchWishlistCount();
+  }, [location.pathname]); // Refetch when route changes
 
   const fetchNotifications = async () => {
     if (!userId) return; // no userId, skip fetch
@@ -162,7 +181,7 @@ const Header = () => {
           <>
             <div ref={bellRef} className="relative">
               <FaBell
-                className="cursor-pointer"
+                className="cursor-pointer hover:text-gray-200"
                 onClick={() => {
                   setIsNotifOpen(!isNotifOpen);
                   fetchNotifications();
@@ -188,10 +207,22 @@ const Header = () => {
                 </div>
               )}
             </div>
-            <FaHeart 
-              className="cursor-pointer" 
-              onClick={() => navigate('/wishlist')}
-            />
+            <div className="relative group">
+              <div className="relative">
+                <FaHeart 
+                  className="cursor-pointer hover:text-red-400 transition-colors" 
+                  onClick={() => navigate('/wishlist')}
+                />
+                {wishlistCount > 0 && (
+                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                    {wishlistCount}
+                  </span>
+                )}
+              </div>
+              <div className="absolute right-0 mt-2 w-32 bg-white text-black text-sm rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                <div className="px-4 py-2">My Wishlist</div>
+              </div>
+            </div>
           </>
         )}
         {isLoggedIn ? (
